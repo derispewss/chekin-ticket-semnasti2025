@@ -78,18 +78,6 @@ export async function deleteAllParticipants() {
 // Ensure database schema exists on server startup
 async function ensureDatabase() {
   try {
-    // Create a connection without specifying a database
-    const connectionWithoutDb = await mysql.createConnection({
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-    });
-
-    // Create the database if it doesn't exist
-    const dbName = process.env.DB_NAME || 'db_participants_semnasti2025_dev';
-    await connectionWithoutDb.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
-    await connectionWithoutDb.end();
-
     // Now create the table using the pool (which connects to the specific database)
     const createTableSQL = `
       CREATE TABLE IF NOT EXISTS participants (
