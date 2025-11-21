@@ -7,8 +7,12 @@ export const pool = mysql.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+  connectionLimit: 2, // Reduced for serverless - Vercel has limited connections
+  maxIdle: 2, // Maximum idle connections
+  idleTimeout: 60000, // Close idle connections after 60 seconds
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
 });
 
 export interface Participant {
@@ -93,7 +97,9 @@ async function ensureDatabase() {
         unique_id VARCHAR(255) NOT NULL UNIQUE,
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255) NOT NULL,
-        present BOOLEAN NOT NULL DEFAULT FALSE
+        present BOOLEAN NOT NULL DEFAULT FALSE,
+        INDEX idx_unique_id (unique_id),
+        INDEX idx_present (present)
       )
     `;
     await pool.query(createTableSQL);
@@ -103,5 +109,7 @@ async function ensureDatabase() {
   }
 }
 
-// Initialize database on module load
-ensureDatabase();
+// Initialize database on module load (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  ensureDatabase();
+}
