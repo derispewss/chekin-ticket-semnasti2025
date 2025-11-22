@@ -13,8 +13,8 @@ function InputCode({
 }) {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.toUpperCase();
-    // Only allow alphanumeric characters and max 5 characters
-    if (/^[A-Z0-9]*$/.test(value) && value.length <= 5) {
+    // Only allow alphanumeric characters and max 3 characters
+    if (/^[A-Z0-9]*$/.test(value) && value.length <= 3) {
       setUniqueCode(value);
     }
   };
@@ -36,7 +36,7 @@ function InputCode({
             value={uniqueCode}
             onChange={handleInputChange}
             placeholder="XXX"
-            maxLength={5}
+            maxLength={3}
             className="flex-1 bg-transparent text-white placeholder-gray-500 outline-none font-mono"
           />
         </div>
