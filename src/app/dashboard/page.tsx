@@ -5,13 +5,15 @@ import { useMounted } from "@/lib/useMounted";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import UploadModal from "@/components/UploadModal";
-import { FaEnvelope, FaTrash, FaUpload } from "react-icons/fa";
+import { FaEnvelope, FaTrash, FaUpload, FaDownload } from "react-icons/fa";
+import Toast from "@/components/Toast";
 
 interface Participant {
   unique: string;
   name: string;
   email: string;
   present: boolean;
+  registered_at?: string;
 }
 
 export default function Dashboard() {
@@ -22,8 +24,21 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [emailLogs, setEmailLogs] = useState<any[]>([]);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [showToast, setShowToast] = useState(false);
 
   const mounted = useMounted();
+
+  const showToastMessage = (message: string, type: "success" | "error") => {
+    setToastMessage(message);
+    setToastType(type);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
 
   const fetchParticipants = async () => {
     try {
@@ -39,8 +54,21 @@ export default function Dashboard() {
     }
   };
 
+  const fetchEmailLogs = async () => {
+    try {
+      const res = await fetch("/api/email-logs");
+      if (res.ok) {
+        const data = await res.json();
+        setEmailLogs(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch email logs:", error);
+    }
+  };
+
   useEffect(() => {
     fetchParticipants();
+    fetchEmailLogs();
   }, []);
 
   const handleDeleteAll = async () => {
@@ -74,6 +102,7 @@ export default function Dashboard() {
       const data = await res.json();
       if (res.ok) {
         alert(data.message);
+        fetchEmailLogs(); // Refresh email logs
       } else {
         alert("Failed to send emails: " + data.error);
       }
@@ -98,12 +127,56 @@ export default function Dashboard() {
       const data = await res.json();
       if (res.ok) {
         alert(`Email sent successfully: ${data.success} of ${data.success + data.failed} sent`);
+        fetchEmailLogs(); // Refresh email logs
       } else {
         alert("Failed to send email: " + data.error);
       }
     } catch (error) {
       console.error("Error sending email:", error);
       alert("An error occurred while sending email.");
+    }
+  };
+
+  const handleExport = async (type: 'all' | 'attended' | 'not-attended') => {
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/export?type=${type}`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Peserta_${type}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        showToastMessage('✅ Data berhasil di-export!', 'success');
+      } else {
+        showToastMessage('❌ Gagal export data', 'error');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      showToastMessage('❌ Terjadi kesalahan saat export', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDeleteEmailLog = async (id: number) => {
+    if (!confirm('Hapus email log ini?')) return;
+
+    try {
+      const res = await fetch(`/api/email-logs?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToastMessage('✅ Email log berhasil dihapus', 'success');
+        fetchEmailLogs(); // Refresh logs
+      } else {
+        showToastMessage('❌ Gagal menghapus email log', 'error');
+      }
+    } catch (error) {
+      console.error('Delete email log error:', error);
+      showToastMessage('❌ Terjadi kesalahan', 'error');
     }
   };
 
@@ -157,7 +230,7 @@ export default function Dashboard() {
           <div className="flex flex-col md:flex-row justify-between gap-4 items-center">
             <h2 className="text-3xl font-bold font-plus-jakarta-sans">Participant List</h2>
 
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-4">
               <button
                 onClick={() => setIsUploadModalOpen(true)}
                 className="px-6 py-2 border border-blue-400 text-blue-300 hover:bg-blue-500/20 transition flex items-center gap-2 rounded-lg"
@@ -177,6 +250,51 @@ export default function Dashboard() {
               >
                 <FaTrash /> Delete All
               </button>
+
+              {/* Export Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  disabled={exporting}
+                  className="px-6 py-2 border border-purple-400 text-purple-300 hover:bg-purple-500/20 transition flex items-center gap-2 rounded-lg"
+                >
+                  <FaDownload /> {exporting ? "Exporting..." : "Export Data"}
+                </button>
+                {showExportMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-[#0f0b24] border border-purple-400/30 rounded-lg shadow-xl z-10">
+                    <button
+                      onClick={() => {
+                        handleExport('all');
+                        setShowExportMenu(false);
+                      }}
+                      disabled={exporting}
+                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200 rounded-t-lg"
+                    >
+                      <FaDownload className="text-purple-400" /> Semua Peserta
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleExport('attended');
+                        setShowExportMenu(false);
+                      }}
+                      disabled={exporting}
+                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200"
+                    >
+                      <FaDownload className="text-green-400" /> Peserta Hadir
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleExport('not-attended');
+                        setShowExportMenu(false);
+                      }}
+                      disabled={exporting}
+                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200 rounded-b-lg"
+                    >
+                      <FaDownload className="text-red-400" /> Peserta Tidak Hadir
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -204,7 +322,13 @@ export default function Dashboard() {
             {loading ? (
               <p className="text-center text-gray-400">Loading data...</p>
             ) : (
-              <TableDashboard filteredData={paginatedData} onResend={handleResendEmail} />
+              <TableDashboard
+                filteredData={paginatedData.map((p) => ({
+                  ...p,
+                  registered_at: p.registered_at || '',
+                }))}
+                onResend={handleResendEmail}
+              />
             )}
           </div>
           {!loading && totalPages > 1 && (
@@ -257,7 +381,71 @@ export default function Dashboard() {
             onUploadSuccess={fetchParticipants}
           />
         </div>
+
+        {/* Email History Section */}
+        <div className="max-w-7xl mx-auto mt-8 rounded-2xl bg-[#181138] border border-[#17D3FD]/30 shadow-2xl p-8 text-white">
+          <h2 className="text-3xl font-bold font-plus-jakarta-sans mb-6">Email History</h2>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left font-plus-jakarta-sans">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="pb-3 px-4">Waktu</th>
+                  <th className="pb-3 px-4">Email</th>
+                  <th className="pb-3 px-4">Unique ID</th>
+                  <th className="pb-3 px-4">Status</th>
+                  <th className="pb-3 px-4">Error</th>
+                  <th className="pb-3 px-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {emailLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-gray-400">
+                      Belum ada email yang dikirim
+                    </td>
+                  </tr>
+                ) : (
+                  emailLogs.map((log) => (
+                    <tr key={log.id} className="border-b border-gray-800 hover:bg-white/5">
+                      <td className="py-3 px-4 text-sm text-gray-300">
+                        {new Date(log.sent_at).toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-3 px-4 text-sm">{log.email}</td>
+                      <td className="py-3 px-4 text-sm font-mono text-blue-300">
+                        {log.participant_unique_id}
+                      </td>
+                      <td className="py-3 px-4">
+                        {log.status === 'success' ? (
+                          <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-semibold">
+                            ✓ Success
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 bg-red-500/20 text-red-300 rounded-full text-xs font-semibold">
+                            ✗ Error
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-red-300">
+                        {log.error_message || '-'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <button
+                          onClick={() => handleDeleteEmailLog(log.id)}
+                          className="px-3 py-1 bg-red-500/20 text-red-300 hover:bg-red-500/30 rounded-lg text-xs transition flex items-center gap-1"
+                        >
+                          <FaTrash className="text-xs" /> Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
+      <Toast message={toastMessage} type={toastType} show={showToast} />
     </main>
   );
 }

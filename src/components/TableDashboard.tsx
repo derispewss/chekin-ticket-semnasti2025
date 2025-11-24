@@ -4,6 +4,7 @@ interface TableDashboardProps {
     name: string;
     email: string;
     present: boolean;
+    registered_at: string;
   }>;
   onResend: (unique: string) => void;
 }
@@ -13,6 +14,7 @@ function TableDashboard({ filteredData, onResend }: TableDashboardProps) {
     <table className="w-full table-auto">
       <thead>
         <tr className="text-left text-gray-300 border-b border-[#17D3FD]/20">
+          <th className="py-3 px-2">Registered At</th>
           <th className="py-3 px-2">Unique Code</th>
           <th className="py-3 px-2">Nama</th>
           <th className="py-3 px-2">Email</th>
@@ -22,8 +24,9 @@ function TableDashboard({ filteredData, onResend }: TableDashboardProps) {
       </thead>
 
       <tbody>
-        {filteredData.map((team, idx) => (
+        {filteredData.map((team, idx) => (  
           <tr key={idx} className="border-b border-[#ffffff]/10 hover:bg-white/5 transition">
+            <td className="py-3 px-2">{team.registered_at ? new Date(team.registered_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase() : 'N/A'}</td>
             <td className="py-3 px-2">{team.unique}</td>
             <td className="py-3 px-2">{team.name}</td>
             <td className="py-3 px-2">{team.email}</td>
