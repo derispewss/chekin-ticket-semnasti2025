@@ -35,7 +35,7 @@ function InputCode({
             type="text"
             value={uniqueCode}
             onChange={handleInputChange}
-            placeholder="XXX"
+            placeholder="000"
             maxLength={3}
             className="flex-1 bg-transparent text-white placeholder-gray-500 outline-none font-mono"
           />

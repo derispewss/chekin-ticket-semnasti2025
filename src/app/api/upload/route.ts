@@ -2,23 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { pool } from '@/lib/db';
 
-// Helper function to parse Excel date
 function parseExcelDate(value: any): string | null {
     if (!value) return null;
 
-    // If it's already a Date object
     if (value instanceof Date) {
         return value.toISOString().slice(0, 19).replace('T', ' ');
     }
 
-    // If it's an Excel serial date number
     if (typeof value === 'number') {
         const excelEpoch = new Date(1899, 11, 30);
         const date = new Date(excelEpoch.getTime() + value * 86400000);
         return date.toISOString().slice(0, 19).replace('T', ' ');
     }
 
-    // If it's a string, try to parse it
     if (typeof value === 'string') {
         try {
             const parsed = new Date(value);
@@ -48,16 +44,27 @@ export async function POST(req: NextRequest) {
         const sheet = workbook.Sheets[sheetName];
         const data = XLSX.utils.sheet_to_json(sheet) as any[];
 
+        const [existingRows] = await pool.query('SELECT unique_id FROM participants');
+        const existingIds = new Set<string>(
+            (existingRows as any[]).map(row => row.unique_id)
+        );
+
         const generatedUniqueIds = new Set<string>();
         const participants = data.map((row) => {
             let uniqueIdSuffix: string;
+            let attempts = 0;
+            const maxAttempts = 300;
             do {
-                const generateRandomLetter = () => String.fromCharCode(65 + Math.floor(Math.random() * 26)); // A-Z
-                uniqueIdSuffix = generateRandomLetter() + generateRandomLetter() + generateRandomLetter();
-            } while (generatedUniqueIds.has(uniqueIdSuffix));
+                const randomNum = Math.floor(Math.random() * 300);
+                uniqueIdSuffix = randomNum.toString().padStart(3, '0');
+                attempts++;
+
+                if (attempts >= maxAttempts) {
+                    throw new Error('No more available unique IDs (000-299 range is full)');
+                }
+            } while (generatedUniqueIds.has(uniqueIdSuffix) || existingIds.has(`SEMNASTI2025-${uniqueIdSuffix}`));
             generatedUniqueIds.add(uniqueIdSuffix);
 
-            // Parse registered_at from Excel
             const registeredAtValue = row.registered_at || row.Registered_At || row.REGISTERED_AT;
             const registeredAt = parseExcelDate(registeredAtValue);
 
@@ -82,7 +89,6 @@ export async function POST(req: NextRequest) {
             p.registered_at
         ]);
 
-        // Bulk insert with registered_at from Excel
         const query = 'INSERT INTO participants (unique_id, name, email, present, registered_at) VALUES ?';
         await pool.query(query, [values]);
 
