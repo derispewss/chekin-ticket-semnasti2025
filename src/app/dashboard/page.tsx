@@ -5,19 +5,9 @@ import { useMounted } from "@/lib/useMounted";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import UploadModal from "@/components/UploadModal";
-import { FaEnvelope, FaTrash, FaUpload, FaDownload } from "react-icons/fa";
+import { FaEnvelope, FaTrash, FaUpload, FaDownload, FaSearch } from "react-icons/fa";
 import Toast from "@/components/Toast";
 import { useRealtimeParticipants } from "@/hooks/useRealtimeParticipants";
-
-interface Participant {
-  unique: string;
-  name: string;
-  email: string;
-  present: boolean;
-  seminar_kit: boolean;
-  consumption: boolean;
-  registered_at?: string;
-}
 
 export default function Dashboard() {
   const [search, setSearch] = useState("");
@@ -224,10 +214,15 @@ export default function Dashboard() {
   const itemsPerPage = 10;
 
   const filteredData = participantData.filter((participant) => {
-    const matchName = participant.name.toLowerCase().includes(search.toLowerCase());
+    const searchLower = search.toLowerCase();
+    const matchName = participant.name.toLowerCase().includes(searchLower);
+    const matchUnique = participant.unique.toLowerCase().includes(searchLower);
+    const matchEmail = participant.email.toLowerCase().includes(searchLower);
+    const matchSearch = matchName || matchUnique || matchEmail;
+
     const matchStatus = statusFilter === "all" ? true : statusFilter === "present" ? participant.present : !participant.present;
 
-    return matchName && matchStatus;
+    return matchSearch && matchStatus;
   });
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -357,14 +352,24 @@ export default function Dashboard() {
               <option value="absent">Tidak Hadir</option>
             </select>
 
-            <input
-              type="text"
-              placeholder="Search by name"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 px-4 py-3 rounded-lg bg-[#0f0b24] border border-[#17D3FD]/20 text-gray-200 outline-none"
-            />
+            <div className="flex-1 relative">
+              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by name, unique code, or email..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 rounded-lg bg-[#0f0b24] border border-[#17D3FD]/20 text-gray-200 outline-none placeholder:text-gray-500 focus:border-[#17D3FD]/60 transition"
+              />
+            </div>
           </div>
+
+          {/* Search Results Info */}
+          {search && (
+            <div className="mt-4 text-sm text-gray-400 font-plus-jakarta-sans">
+              Menampilkan <span className="text-[#17D3FD] font-semibold">{filteredData.length}</span> hasil untuk "{search}"
+            </div>
+          )}
 
           <div className="mt-6 overflow-x-auto font-plus-jakarta-sans">
             {loading ? (
