@@ -24,6 +24,7 @@ export interface Participant {
   seminar_kit: boolean;
   consumption: boolean;
   registered_at?: Date;
+  qr_hash?: string | null; // Hash unik untuk keamanan QR code (null = invalidated)
 }
 
 export interface EmailLog {
@@ -46,6 +47,7 @@ export async function getParticipants(): Promise<Participant[]> {
     seminar_kit: Boolean(row.seminar_kit),
     consumption: Boolean(row.consumption),
     registered_at: row.registered_at ? new Date(row.registered_at) : undefined,
+    qr_hash: row.qr_hash,
   }));
 }
 
@@ -62,6 +64,7 @@ export async function getParticipantByUniqueId(unique: string): Promise<Particip
     seminar_kit: Boolean(row.seminar_kit),
     consumption: Boolean(row.consumption),
     registered_at: row.registered_at ? new Date(row.registered_at) : undefined,
+    qr_hash: row.qr_hash,
   };
 }
 
@@ -82,6 +85,11 @@ export async function updateParticipant(unique: string, updates: Partial<Partici
   if (updates.consumption !== undefined) {
     fields.push('consumption = ?');
     values.push(updates.consumption);
+  }
+
+  if (updates.qr_hash !== undefined) {
+    fields.push('qr_hash = ?');
+    values.push(updates.qr_hash);
   }
 
   if (fields.length === 0) return null;
@@ -164,7 +172,7 @@ async function ensureDatabase() {
     await connectionWithoutDb.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
     await connectionWithoutDb.end();
 
-    // Create participants table with seminar_kit and consumption columns
+    // Create participants table with qr_hash column
     const createParticipantsTableSQL = `
       CREATE TABLE IF NOT EXISTS participants (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -175,9 +183,11 @@ async function ensureDatabase() {
         seminar_kit BOOLEAN NOT NULL DEFAULT FALSE,
         consumption BOOLEAN NOT NULL DEFAULT FALSE,
         registered_at TIMESTAMP NULL,
+        qr_hash VARCHAR(255) NULL,
         INDEX idx_unique_id (unique_id),
         INDEX idx_present (present),
-        INDEX idx_registered_at (registered_at)
+        INDEX idx_registered_at (registered_at),
+        INDEX idx_qr_hash (qr_hash)
       )
     `;
     await pool.query(createParticipantsTableSQL);

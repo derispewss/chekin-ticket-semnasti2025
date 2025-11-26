@@ -17,7 +17,6 @@ export function useRealtimeParticipants() {
     const eventSourceRef = useRef<EventSource | null>(null);
 
     useEffect(() => {
-        // Create EventSource connection
         const eventSource = new EventSource('/api/participants/stream');
         eventSourceRef.current = eventSource;
 
@@ -47,11 +46,8 @@ export function useRealtimeParticipants() {
             console.error('SSE Error:', err);
             setIsConnected(false);
             setError('Connection error');
-
-            // EventSource will automatically try to reconnect
         };
 
-        // Cleanup on unmount
         return () => {
             eventSource.close();
             eventSourceRef.current = null;

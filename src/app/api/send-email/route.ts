@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import QRCode from 'qrcode';
-import { pool, logEmailSend } from '@/lib/db';
+import { pool, logEmailSend, updateParticipant } from '@/lib/db';
+import { generateQRHash, createSecureQRPayload } from '@/lib/qr-security';
 import { RowDataPacket } from 'mysql2';
 
 export async function POST(req: NextRequest) {
@@ -38,13 +39,16 @@ export async function POST(req: NextRequest) {
 
     for (const p of participants) {
       try {
-        // Generate QR Code as buffer
-        const qrCodeBuffer = await QRCode.toBuffer(p.unique_id, {
+        const qrHash = generateQRHash(p.unique_id);
+        await updateParticipant(p.unique_id, { qr_hash: qrHash });
+        const securePayload = createSecureQRPayload(p.unique_id, qrHash);
+
+        const qrCodeBuffer = await QRCode.toBuffer(securePayload, {
           width: 300,
           margin: 2,
+          errorCorrectionLevel: 'H',
         });
 
-        // Simple Email Template - using CID reference
         const htmlContent = `
           <!DOCTYPE html>
           <html>
@@ -136,18 +140,16 @@ export async function POST(req: NextRequest) {
             {
               filename: 'qrcode.png',
               content: qrCodeBuffer,
-              cid: 'qrcode', // same as referenced in img src
+              cid: 'qrcode',
             },
           ],
         });
 
         successCount++;
-        // Log successful email send
         await logEmailSend(p.unique_id, p.email, 'success');
       } catch (err) {
         console.error(`Failed to send email to ${p.email}:`, err);
         failCount++;
-        // Log failed email send
         await logEmailSend(p.unique_id, p.email, 'error', err instanceof Error ? err.message : 'Unknown error');
       }
     }

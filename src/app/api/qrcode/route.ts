@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
+import { generateQRHash, createSecureQRPayload } from "@/lib/qr-security";
+import { updateParticipant } from "@/lib/db";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -10,9 +12,18 @@ export async function GET(request: Request) {
   }
 
   try {
-    const qrCodeDataUrl = await QRCode.toDataURL(unique);
+    const qrHash = generateQRHash(unique);
+    await updateParticipant(unique, { qr_hash: qrHash });
+    const securePayload = createSecureQRPayload(unique, qrHash);
+    const qrCodeDataUrl = await QRCode.toDataURL(securePayload, {
+      errorCorrectionLevel: 'H',
+      margin: 2,
+      width: 300,
+    });
+
     return NextResponse.json({ qrCode: qrCodeDataUrl });
   } catch (error) {
+    console.error('QR generation error:', error);
     return NextResponse.json({ error: "Failed to generate QR code" }, { status: 500 });
   }
 }

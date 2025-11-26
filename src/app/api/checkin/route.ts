@@ -1,4 +1,5 @@
 import { getParticipantByUniqueId, updateParticipant } from "@/lib/db";
+import { parseQRPayload, validateQRHash } from "@/lib/qr-security";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -9,11 +10,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unique ID is required" }, { status: 400 });
     }
 
+    const parsed = parseQRPayload(unique);
+
+    if (!parsed) {
+      return NextResponse.json({
+        error: "QR Code tidak valid atau sudah kadaluarsa. Silakan minta QR code baru.",
+        invalidQR: true
+      }, { status: 400 });
+    }
+
+    const { uniqueId, hash } = parsed;
+
     // Check if participant exists
-    const participant = await getParticipantByUniqueId(unique);
+    const participant = await getParticipantByUniqueId(uniqueId);
 
     if (!participant) {
       return NextResponse.json({ error: "Peserta tidak ditemukan" }, { status: 404 });
+    }
+
+    if (!validateQRHash(hash, participant.qr_hash)) {
+      return NextResponse.json({
+        error: "QR Code tidak valid atau sudah pernah digunakan. Silakan minta QR code baru.",
+        invalidQR: true,
+        participant: {
+          name: participant.name,
+          unique: participant.unique
+        }
+      }, { status: 400 });
     }
 
     // Check if already checked in
@@ -28,8 +51,10 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // Perform check-in
-    const success = await updateParticipant(unique, { present: true });
+    const success = await updateParticipant(uniqueId, {
+      present: true,
+      qr_hash: null 
+    });
 
     if (!success) {
       return NextResponse.json({ error: "Gagal melakukan check-in" }, { status: 500 });

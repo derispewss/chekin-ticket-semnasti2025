@@ -15,7 +15,8 @@ export default function Home() {
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const qrBoxId = "qr-reader";
   const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const [toastTitle, setToastTitle] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error" | "warning" | "info">("success");
   const [showToast, setShowToast] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const lastScanTimeRef = useRef<number>(0); // Track last scan time for cooldown
@@ -23,8 +24,9 @@ export default function Home() {
   const mounted = useMounted();
   if (!mounted) return null;
 
-  const showToastMessage = (message: string, type: "success" | "error") => {
+  const showToastMessage = (message: string, type: "success" | "error" | "warning" | "info", title?: string) => {
     setToastMessage(message);
+    setToastTitle(title || "");
     setToastType(type);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
@@ -55,23 +57,25 @@ export default function Home() {
       const data = await response.json();
 
       if (response.ok) {
-        showToastMessage(`✅ Check-in berhasil! ${data.participant?.name || fullCode}`, "success");
+        showToastMessage(`Halo ${data.participant?.name || fullCode}, Selamat Datang di SEMNASTI 2025`, "success", "Check-in Berhasil!");
         setUniqueCode("");
       } else {
-        // Handle error - check if already checked in
-        if (data.alreadyCheckedIn) {
-          showToastMessage(`⚠️ ${data.participant?.name} sudah check-in sebelumnya`, "error");
+        // Handle error - check if already checked in or invalid QR
+        if (data.invalidQR) {
+          showToastMessage(data.error || 'QR Code tidak valid atau sudah digunakan', "warning", "QR Code Tidak Valid");
+        } else if (data.alreadyCheckedIn) {
+          showToastMessage(`${data.participant?.name} sudah melakukan check-in sebelumnya`, "warning", "Sudah Check-in");
         } else {
-          showToastMessage(`❌ ${data.error || 'Check-in gagal'}`, "error");
+          showToastMessage(data.error || 'Check-in gagal', "error", "Check-in Gagal");
         }
       }
     } catch (error: any) {
       clearTimeout(timeoutId); // Ensure timeout is cleared on error
       if (error.name === 'AbortError') {
-        showToastMessage('❌ Waktu check-in habis (timeout 2 detik)', "error");
+        showToastMessage('Waktu check-in habis (timeout 2 detik)', "error", "Timeout");
       } else {
         console.error('Check-in error:', error);
-        showToastMessage('❌ Terjadi kesalahan saat check-in', "error");
+        showToastMessage('Terjadi kesalahan saat check-in', "error", "Error");
       }
     } finally {
       setIsLoading(false);
@@ -105,19 +109,19 @@ export default function Home() {
       const data = await response.json();
 
       if (response.ok) {
-        showToastMessage(`✅ Check-in berhasil! ${data.participant?.name || decodedText}`, "success");
-        // Scanner tetap berjalan untuk scan berikutnya
+        showToastMessage(`Halo ${data.participant?.name || decodedText}, Selamat Datang di SEMNASTI 2025`, "success", "Check-in Berhasil!");
       } else {
-        // Handle error - check if already checked in
-        if (data.alreadyCheckedIn) {
-          showToastMessage(`⚠️ ${data.participant?.name} sudah check-in sebelumnya`, "error");
+        if (data.invalidQR) {
+          showToastMessage(data.error || 'QR Code tidak valid atau sudah digunakan', "warning", "QR Code Tidak Valid");
+        } else if (data.alreadyCheckedIn) {
+          showToastMessage(`${data.participant?.name} sudah melakukan check-in sebelumnya`, "warning", "Sudah Check-in");
         } else {
-          showToastMessage(`❌ ${data.error || 'Check-in gagal'}`, "error");
+          showToastMessage(data.error || 'Check-in gagal', "error", "Check-in Gagal");
         }
       }
     } catch (error) {
       console.error('Check-in error:', error);
-      showToastMessage('❌ Terjadi kesalahan saat check-in', "error");
+      showToastMessage('Terjadi kesalahan saat check-in', "error", "Error");
     } finally {
       setIsLoading(false);
     }
@@ -194,7 +198,7 @@ export default function Home() {
           )}
         </div>
       </div>
-      <Toast message={toastMessage} type={toastType} show={showToast} />
+      <Toast message={toastMessage} type={toastType} show={showToast} title={toastTitle} />
     </main>
   );
 }
