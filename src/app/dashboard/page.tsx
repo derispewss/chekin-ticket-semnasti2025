@@ -7,12 +7,15 @@ import { useEffect, useState } from "react";
 import UploadModal from "@/components/UploadModal";
 import { FaEnvelope, FaTrash, FaUpload, FaDownload } from "react-icons/fa";
 import Toast from "@/components/Toast";
+import { useRealtimeParticipants } from "@/hooks/useRealtimeParticipants";
 
 interface Participant {
   unique: string;
   name: string;
   email: string;
   present: boolean;
+  seminar_kit: boolean;
+  consumption: boolean;
   registered_at?: string;
 }
 
@@ -20,7 +23,6 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [participantData, setParticipantData] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -33,25 +35,14 @@ export default function Dashboard() {
 
   const mounted = useMounted();
 
+  // Use real-time participants hook
+  const { participants: participantData, isConnected, error: realtimeError, refreshManually } = useRealtimeParticipants();
+
   const showToastMessage = (message: string, type: "success" | "error") => {
     setToastMessage(message);
     setToastType(type);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
-  };
-
-  const fetchParticipants = async () => {
-    try {
-      const res = await fetch("/api/participants");
-      if (res.ok) {
-        const data = await res.json();
-        setParticipantData(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch participants:", error);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const fetchEmailLogs = async () => {
@@ -67,16 +58,24 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    fetchParticipants();
+    // Initial load
+    setLoading(false);
     fetchEmailLogs();
   }, []);
+
+  // Show realtime error if any
+  useEffect(() => {
+    if (realtimeError) {
+      showToastMessage(`⚠️ Real-time connection: ${realtimeError}`, "error");
+    }
+  }, [realtimeError]);
 
   const handleDeleteAll = async () => {
     if (confirm("Are you sure you want to delete ALL participants? This cannot be undone.")) {
       try {
         const res = await fetch("/api/participants?all=true", { method: "DELETE" });
         if (res.ok) {
-          fetchParticipants();
+          refreshManually();
           alert("All participants deleted successfully.");
         } else {
           alert("Failed to delete participants.");
@@ -134,6 +133,46 @@ export default function Dashboard() {
     } catch (error) {
       console.error("Error sending email:", error);
       alert("An error occurred while sending email.");
+    }
+  };
+
+  const handleUpdateKit = async (uniqueId: string, value: boolean) => {
+    try {
+      const res = await fetch("/api/participants/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unique: uniqueId, seminar_kit: value }),
+      });
+
+      if (res.ok) {
+        showToastMessage(value ? "✅ Seminar kit ditandai sudah diambil" : "⚠️ Seminar kit ditandai belum diambil", "success");
+        refreshManually();
+      } else {
+        showToastMessage("❌ Gagal update seminar kit", "error");
+      }
+    } catch (error) {
+      console.error("Error updating seminar kit:", error);
+      showToastMessage("❌ Terjadi kesalahan", "error");
+    }
+  };
+
+  const handleUpdateConsumption = async (uniqueId: string, value: boolean) => {
+    try {
+      const res = await fetch("/api/participants/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unique: uniqueId, consumption: value }),
+      });
+
+      if (res.ok) {
+        showToastMessage(value ? "✅ Consumption ditandai sudah diambil" : "⚠️ Consumption ditandai belum diambil", "success");
+        refreshManually();
+      } else {
+        showToastMessage("❌ Gagal update consumption", "error");
+      }
+    } catch (error) {
+      console.error("Error updating consumption:", error);
+      showToastMessage("❌ Terjadi kesalahan", "error");
     }
   };
 
@@ -228,7 +267,16 @@ export default function Dashboard() {
 
         <div className="max-w-7xl mx-auto mt-10 rounded-2xl bg-[#181138] border border-[#17D3FD]/30 shadow-2xl p-8 text-white">
           <div className="flex flex-col md:flex-row justify-between gap-4 items-center">
-            <h2 className="text-3xl font-bold font-plus-jakarta-sans">Participant List</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-3xl font-bold font-plus-jakarta-sans">Participant List</h2>
+              {/* Real-time connection indicator */}
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-black/30 border border-gray-700">
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+                <span className="text-xs text-gray-300">
+                  {isConnected ? 'Live' : 'Offline'}
+                </span>
+              </div>
+            </div>
 
             <div className="flex flex-wrap gap-4">
               <button
@@ -326,8 +374,12 @@ export default function Dashboard() {
                 filteredData={paginatedData.map((p) => ({
                   ...p,
                   registered_at: p.registered_at || '',
+                  seminar_kit: p.seminar_kit || false,
+                  consumption: p.consumption || false,
                 }))}
                 onResend={handleResendEmail}
+                onUpdateKit={handleUpdateKit}
+                onUpdateConsumption={handleUpdateConsumption}
               />
             )}
           </div>
@@ -378,7 +430,7 @@ export default function Dashboard() {
           <UploadModal
             isOpen={isUploadModalOpen}
             onClose={() => setIsUploadModalOpen(false)}
-            onUploadSuccess={fetchParticipants}
+            onUploadSuccess={refreshManually}
           />
         </div>
 

@@ -21,6 +21,8 @@ export interface Participant {
   name: string;
   email: string;
   present: boolean;
+  seminar_kit: boolean;
+  consumption: boolean;
   registered_at?: Date;
 }
 
@@ -41,6 +43,8 @@ export async function getParticipants(): Promise<Participant[]> {
     name: row.name,
     email: row.email,
     present: Boolean(row.present),
+    seminar_kit: Boolean(row.seminar_kit),
+    consumption: Boolean(row.consumption),
     registered_at: row.registered_at ? new Date(row.registered_at) : undefined,
   }));
 }
@@ -55,6 +59,8 @@ export async function getParticipantByUniqueId(unique: string): Promise<Particip
     name: row.name,
     email: row.email,
     present: Boolean(row.present),
+    seminar_kit: Boolean(row.seminar_kit),
+    consumption: Boolean(row.consumption),
     registered_at: row.registered_at ? new Date(row.registered_at) : undefined,
   };
 }
@@ -66,6 +72,16 @@ export async function updateParticipant(unique: string, updates: Partial<Partici
   if (updates.present !== undefined) {
     fields.push('present = ?');
     values.push(updates.present);
+  }
+
+  if (updates.seminar_kit !== undefined) {
+    fields.push('seminar_kit = ?');
+    values.push(updates.seminar_kit);
+  }
+
+  if (updates.consumption !== undefined) {
+    fields.push('consumption = ?');
+    values.push(updates.consumption);
   }
 
   if (fields.length === 0) return null;
@@ -148,7 +164,7 @@ async function ensureDatabase() {
     await connectionWithoutDb.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
     await connectionWithoutDb.end();
 
-    // Create participants table - registered_at NULL (no default)
+    // Create participants table with seminar_kit and consumption columns
     const createParticipantsTableSQL = `
       CREATE TABLE IF NOT EXISTS participants (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -156,6 +172,8 @@ async function ensureDatabase() {
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255) NOT NULL,
         present BOOLEAN NOT NULL DEFAULT FALSE,
+        seminar_kit BOOLEAN NOT NULL DEFAULT FALSE,
+        consumption BOOLEAN NOT NULL DEFAULT FALSE,
         registered_at TIMESTAMP NULL,
         INDEX idx_unique_id (unique_id),
         INDEX idx_present (present),
