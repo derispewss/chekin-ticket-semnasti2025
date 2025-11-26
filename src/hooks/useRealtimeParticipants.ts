@@ -7,6 +7,7 @@ interface Participant {
     present: boolean;
     seminar_kit: boolean;
     consumption: boolean;
+    heavy_meal: boolean;
     registered_at?: string;
 }
 

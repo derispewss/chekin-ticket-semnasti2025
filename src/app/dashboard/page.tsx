@@ -166,6 +166,26 @@ export default function Dashboard() {
     }
   };
 
+  const handleUpdateHeavyMeal = async (uniqueId: string, value: boolean) => {
+    try {
+      const res = await fetch("/api/participants/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unique: uniqueId, heavy_meal: value }),
+      });
+
+      if (res.ok) {
+        showToastMessage(value ? "✅ Makanan berat ditandai sudah diambil" : "⚠️ Makanan berat ditandai belum diambil", "success");
+        refreshManually();
+      } else {
+        showToastMessage("❌ Gagal update makanan berat", "error");
+      }
+    } catch (error) {
+      console.error("Error updating heavy meal:", error);
+      showToastMessage("❌ Terjadi kesalahan", "error");
+    }
+  };
+
   const handleExport = async (type: 'all' | 'attended' | 'not-attended') => {
     setExporting(true);
     try {
@@ -251,19 +271,19 @@ export default function Dashboard() {
         className="h-4/5 w-auto absolute right-0 z-0 opacity-40"
       />
 
-      <div className="w-full min-h-screen p-14 bg-linear-to-r from-[#17D3FD]/20 to-[#CD3DFF]/20 backdrop-blur-sm relative z-10">
-        <h1 className="text-6xl text-transparent bg-clip-text bg-linear-to-t from-gray-400 to-white uppercase font-bold font-stormfaze text-center">
+      <div className="w-full min-h-screen px-4 py-8 md:px-8 md:py-10 lg:px-14 lg:py-14 bg-linear-to-r from-[#17D3FD]/20 to-[#CD3DFF]/20 backdrop-blur-sm relative z-10">
+        <h1 className="text-4xl md:text-5xl lg:text-6xl text-transparent bg-clip-text bg-linear-to-t from-gray-400 to-white uppercase font-bold font-stormfaze text-center">
           SEMNASTI 2025
         </h1>
 
-        <h2 className="text-gray-200 text-xl mt-2 text-center font-plus-jakarta-sans">
+        <h2 className="text-gray-200 text-base md:text-lg lg:text-xl mt-2 text-center font-plus-jakarta-sans px-4">
           Dashboard Presensi & Registrasi Ulang Peserta
         </h2>
 
-        <div className="max-w-7xl mx-auto mt-10 rounded-2xl bg-[#181138] border border-[#17D3FD]/30 shadow-2xl p-8 text-white">
-          <div className="flex flex-col md:flex-row justify-between gap-4 items-center">
-            <div className="flex items-center gap-3">
-              <h2 className="text-3xl font-bold font-plus-jakarta-sans">Participant List</h2>
+        <div className="max-w-7xl mx-auto mt-6 md:mt-8 lg:mt-10 rounded-xl md:rounded-2xl bg-[#181138] border border-[#17D3FD]/30 shadow-2xl p-4 md:p-6 lg:p-8 text-white">
+          <div className="flex flex-col lg:flex-row justify-between gap-4 lg:gap-6 items-start lg:items-center">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full lg:w-auto">
+              <h2 className="text-2xl md:text-3xl font-bold font-plus-jakarta-sans">Participant List</h2>
               {/* Real-time connection indicator */}
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-black/30 border border-gray-700">
                 <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
@@ -273,47 +293,47 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-4">
+            <div className="grid grid-cols-2 lg:flex lg:flex-wrap gap-2 md:gap-3 w-full lg:w-auto">
               <button
                 onClick={() => setIsUploadModalOpen(true)}
-                className="px-6 py-2 border border-blue-400 text-blue-300 hover:bg-blue-500/20 transition flex items-center gap-2 rounded-lg"
+                className="px-3 md:px-4 lg:px-6 py-2 md:py-2.5 border border-blue-400 text-blue-300 hover:bg-blue-500/20 transition flex items-center justify-center gap-2 rounded-lg text-sm md:text-base whitespace-nowrap"
               >
-                <FaUpload /> Upload Data
+                <FaUpload className="text-sm" /> <span className="hidden sm:inline">Upload Data</span><span className="sm:hidden">Upload</span>
               </button>
               <button
                 onClick={handleSendEmail}
                 disabled={sendingEmail}
-                className="px-6 py-2 border border-green-400 text-green-300 hover:bg-green-500/20 transition flex items-center gap-2 rounded-lg"
+                className="px-3 md:px-4 lg:px-6 py-2 md:py-2.5 border border-green-400 text-green-300 hover:bg-green-500/20 transition flex items-center justify-center gap-2 rounded-lg text-sm md:text-base whitespace-nowrap disabled:opacity-50"
               >
-                <FaEnvelope /> {sendingEmail ? "Sending..." : "Send Emails"}
+                <FaEnvelope className="text-sm" /> <span className="hidden sm:inline">{sendingEmail ? "Sending..." : "Send Emails"}</span><span className="sm:hidden">Email</span>
               </button>
               <button
                 onClick={handleDeleteAll}
-                className="px-6 py-2 border border-red-400 text-red-300 hover:bg-red-500/20 transition flex items-center gap-2 rounded-lg"
+                className="px-3 md:px-4 lg:px-6 py-2 md:py-2.5 border border-red-400 text-red-300 hover:bg-red-500/20 transition flex items-center justify-center gap-2 rounded-lg text-sm md:text-base whitespace-nowrap"
               >
-                <FaTrash /> Delete All
+                <FaTrash className="text-sm" /> <span className="hidden sm:inline">Delete All</span><span className="sm:hidden">Delete</span>
               </button>
 
               {/* Export Dropdown */}
-              <div className="relative">
+              <div className="relative col-span-2 lg:col-span-1">
                 <button
                   onClick={() => setShowExportMenu(!showExportMenu)}
                   disabled={exporting}
-                  className="px-6 py-2 border border-purple-400 text-purple-300 hover:bg-purple-500/20 transition flex items-center gap-2 rounded-lg"
+                  className="w-full lg:w-auto px-3 md:px-4 lg:px-6 py-2 md:py-2.5 border border-purple-400 text-purple-300 hover:bg-purple-500/20 transition flex items-center justify-center gap-2 rounded-lg text-sm md:text-base whitespace-nowrap disabled:opacity-50"
                 >
-                  <FaDownload /> {exporting ? "Exporting..." : "Export Data"}
+                  <FaDownload className="text-sm" /> {exporting ? "Exporting..." : "Export Data"}
                 </button>
                 {showExportMenu && (
-                  <div className="absolute right-0 mt-2 w-56 bg-[#0f0b24] border border-purple-400/30 rounded-lg shadow-xl z-10">
+                  <div className="absolute right-0 mt-2 w-full lg:w-56 bg-[#0f0b24] border border-purple-400/30 rounded-lg shadow-xl z-20">
                     <button
                       onClick={() => {
                         handleExport('all');
                         setShowExportMenu(false);
                       }}
                       disabled={exporting}
-                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200 rounded-t-lg"
+                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200 rounded-t-lg text-sm md:text-base"
                     >
-                      <FaDownload className="text-purple-400" /> Semua Peserta
+                      <FaDownload className="text-purple-400 text-sm" /> Semua Peserta
                     </button>
                     <button
                       onClick={() => {
@@ -321,9 +341,9 @@ export default function Dashboard() {
                         setShowExportMenu(false);
                       }}
                       disabled={exporting}
-                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200"
+                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200 text-sm md:text-base"
                     >
-                      <FaDownload className="text-green-400" /> Peserta Hadir
+                      <FaDownload className="text-green-400 text-sm" /> Peserta Hadir
                     </button>
                     <button
                       onClick={() => {
@@ -331,9 +351,9 @@ export default function Dashboard() {
                         setShowExportMenu(false);
                       }}
                       disabled={exporting}
-                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200 rounded-b-lg"
+                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200 rounded-b-lg text-sm md:text-base"
                     >
-                      <FaDownload className="text-red-400" /> Peserta Tidak Hadir
+                      <FaDownload className="text-red-400 text-sm" /> Peserta Tidak Hadir
                     </button>
                   </div>
                 )}
@@ -341,11 +361,11 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row gap-4 mt-6 font-plus-jakarta-sans">
+          <div className="flex flex-col sm:flex-row gap-3 md:gap-4 mt-4 md:mt-6 font-plus-jakarta-sans">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-3 rounded-lg bg-[#0f0b24] border border-[#17D3FD]/20 text-gray-200 outline-none"
+              className="px-4 py-2.5 md:py-3 rounded-lg bg-[#0f0b24] border border-[#17D3FD]/20 text-gray-200 outline-none text-sm md:text-base focus:border-[#17D3FD]/60 transition"
             >
               <option value="all">Semua</option>
               <option value="present">Hadir</option>
@@ -353,13 +373,13 @@ export default function Dashboard() {
             </select>
 
             <div className="flex-1 relative">
-              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <FaSearch className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
               <input
                 type="text"
                 placeholder="Search by name, unique code, or email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-lg bg-[#0f0b24] border border-[#17D3FD]/20 text-gray-200 outline-none placeholder:text-gray-500 focus:border-[#17D3FD]/60 transition"
+                className="w-full pl-9 md:pl-11 pr-4 py-2.5 md:py-3 rounded-lg bg-[#0f0b24] border border-[#17D3FD]/20 text-gray-200 outline-none placeholder:text-gray-500 focus:border-[#17D3FD]/60 transition text-sm md:text-base"
               />
             </div>
           </div>
@@ -381,10 +401,12 @@ export default function Dashboard() {
                   registered_at: p.registered_at || '',
                   seminar_kit: p.seminar_kit || false,
                   consumption: p.consumption || false,
+                  heavy_meal: p.heavy_meal || false,
                 }))}
                 onResend={handleResendEmail}
                 onUpdateKit={handleUpdateKit}
                 onUpdateConsumption={handleUpdateConsumption}
+                onUpdateHeavyMeal={handleUpdateHeavyMeal}
               />
             )}
           </div>
@@ -440,8 +462,8 @@ export default function Dashboard() {
         </div>
 
         {/* Email History Section */}
-        <div className="max-w-7xl mx-auto mt-8 rounded-2xl bg-[#181138] border border-[#17D3FD]/30 shadow-2xl p-8 text-white">
-          <h2 className="text-3xl font-bold font-plus-jakarta-sans mb-6">Email History</h2>
+        <div className="max-w-7xl mx-auto mt-6 md:mt-8 rounded-xl md:rounded-2xl bg-[#181138] border border-[#17D3FD]/30 shadow-2xl p-4 md:p-6 lg:p-8 text-white">
+          <h2 className="text-2xl md:text-3xl font-bold font-plus-jakarta-sans mb-4 md:mb-6">Email History</h2>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left font-plus-jakarta-sans">

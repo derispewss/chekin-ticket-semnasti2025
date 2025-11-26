@@ -23,8 +23,9 @@ export interface Participant {
   present: boolean;
   seminar_kit: boolean;
   consumption: boolean;
+  heavy_meal: boolean;
   registered_at?: Date;
-  qr_hash?: string | null; // Hash unik untuk keamanan QR code (null = invalidated)
+  qr_hash?: string | null;
 }
 
 export interface EmailLog {
@@ -46,6 +47,7 @@ export async function getParticipants(): Promise<Participant[]> {
     present: Boolean(row.present),
     seminar_kit: Boolean(row.seminar_kit),
     consumption: Boolean(row.consumption),
+    heavy_meal: Boolean(row.heavy_meal),
     registered_at: row.registered_at ? new Date(row.registered_at) : undefined,
     qr_hash: row.qr_hash,
   }));
@@ -63,6 +65,7 @@ export async function getParticipantByUniqueId(unique: string): Promise<Particip
     present: Boolean(row.present),
     seminar_kit: Boolean(row.seminar_kit),
     consumption: Boolean(row.consumption),
+    heavy_meal: Boolean(row.heavy_meal),
     registered_at: row.registered_at ? new Date(row.registered_at) : undefined,
     qr_hash: row.qr_hash,
   };
@@ -85,6 +88,11 @@ export async function updateParticipant(unique: string, updates: Partial<Partici
   if (updates.consumption !== undefined) {
     fields.push('consumption = ?');
     values.push(updates.consumption);
+  }
+
+  if (updates.heavy_meal !== undefined) {
+    fields.push('heavy_meal = ?');
+    values.push(updates.heavy_meal);
   }
 
   if (updates.qr_hash !== undefined) {
@@ -172,7 +180,7 @@ async function ensureDatabase() {
     await connectionWithoutDb.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
     await connectionWithoutDb.end();
 
-    // Create participants table with qr_hash column
+    // Create participants table with heavy_meal column
     const createParticipantsTableSQL = `
       CREATE TABLE IF NOT EXISTS participants (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -182,6 +190,7 @@ async function ensureDatabase() {
         present BOOLEAN NOT NULL DEFAULT FALSE,
         seminar_kit BOOLEAN NOT NULL DEFAULT FALSE,
         consumption BOOLEAN NOT NULL DEFAULT FALSE,
+        heavy_meal BOOLEAN NOT NULL DEFAULT FALSE,
         registered_at TIMESTAMP NULL,
         qr_hash VARCHAR(255) NULL,
         INDEX idx_unique_id (unique_id),

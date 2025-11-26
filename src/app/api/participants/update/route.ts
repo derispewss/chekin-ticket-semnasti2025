@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { unique, seminar_kit, consumption } = body;
+        const { unique, seminar_kit, consumption, heavy_meal } = body;
 
         if (!unique) {
             return NextResponse.json({ error: "Unique ID is required" }, { status: 400 });
@@ -18,6 +18,10 @@ export async function POST(request: Request) {
 
         if (consumption !== undefined) {
             updates.consumption = consumption;
+        }
+
+        if (heavy_meal !== undefined) {
+            updates.heavy_meal = heavy_meal;
         }
 
         if (Object.keys(updates).length === 0) {
