@@ -23,6 +23,9 @@ export default function Dashboard() {
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const [showToast, setShowToast] = useState(false);
 
+  // Optimistic UI state for checkboxes
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { seminar_kit?: boolean; consumption?: boolean; heavy_meal?: boolean }>>({});
+
   const mounted = useMounted();
 
   // Use real-time participants hook
@@ -127,6 +130,12 @@ export default function Dashboard() {
   };
 
   const handleUpdateKit = async (uniqueId: string, value: boolean) => {
+    // Optimistic update - langsung update UI
+    setOptimisticUpdates(prev => ({
+      ...prev,
+      [uniqueId]: { ...prev[uniqueId], seminar_kit: value }
+    }));
+
     try {
       const res = await fetch("/api/participants/update", {
         method: "POST",
@@ -136,17 +145,49 @@ export default function Dashboard() {
 
       if (res.ok) {
         showToastMessage(value ? "✅ Seminar kit ditandai sudah diambil" : "⚠️ Seminar kit ditandai belum diambil", "success");
-        refreshManually();
+        // Clear optimistic update setelah berhasil
+        setOptimisticUpdates(prev => {
+          const newState = { ...prev };
+          if (newState[uniqueId]) {
+            delete newState[uniqueId].seminar_kit;
+            if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
+          }
+          return newState;
+        });
       } else {
+        // Rollback jika gagal
+        setOptimisticUpdates(prev => {
+          const newState = { ...prev };
+          if (newState[uniqueId]) {
+            delete newState[uniqueId].seminar_kit;
+            if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
+          }
+          return newState;
+        });
         showToastMessage("❌ Gagal update seminar kit", "error");
       }
     } catch (error) {
+      // Rollback jika error
+      setOptimisticUpdates(prev => {
+        const newState = { ...prev };
+        if (newState[uniqueId]) {
+          delete newState[uniqueId].seminar_kit;
+          if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
+        }
+        return newState;
+      });
       console.error("Error updating seminar kit:", error);
       showToastMessage("❌ Terjadi kesalahan", "error");
     }
   };
 
   const handleUpdateConsumption = async (uniqueId: string, value: boolean) => {
+    // Optimistic update - langsung update UI
+    setOptimisticUpdates(prev => ({
+      ...prev,
+      [uniqueId]: { ...prev[uniqueId], consumption: value }
+    }));
+
     try {
       const res = await fetch("/api/participants/update", {
         method: "POST",
@@ -155,18 +196,50 @@ export default function Dashboard() {
       });
 
       if (res.ok) {
-        showToastMessage(value ? "✅ Consumption ditandai sudah diambil" : "⚠️ Consumption ditandai belum diambil", "success");
-        refreshManually();
+        showToastMessage(value ? "✅ Snack ditandai sudah diambil" : "⚠️ Snack ditandai belum diambil", "success");
+        // Clear optimistic update setelah berhasil
+        setOptimisticUpdates(prev => {
+          const newState = { ...prev };
+          if (newState[uniqueId]) {
+            delete newState[uniqueId].consumption;
+            if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
+          }
+          return newState;
+        });
       } else {
-        showToastMessage("❌ Gagal update consumption", "error");
+        // Rollback jika gagal
+        setOptimisticUpdates(prev => {
+          const newState = { ...prev };
+          if (newState[uniqueId]) {
+            delete newState[uniqueId].consumption;
+            if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
+          }
+          return newState;
+        });
+        showToastMessage("❌ Gagal update snack", "error");
       }
     } catch (error) {
+      // Rollback jika error
+      setOptimisticUpdates(prev => {
+        const newState = { ...prev };
+        if (newState[uniqueId]) {
+          delete newState[uniqueId].consumption;
+          if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
+        }
+        return newState;
+      });
       console.error("Error updating consumption:", error);
       showToastMessage("❌ Terjadi kesalahan", "error");
     }
   };
 
   const handleUpdateHeavyMeal = async (uniqueId: string, value: boolean) => {
+    // Optimistic update - langsung update UI
+    setOptimisticUpdates(prev => ({
+      ...prev,
+      [uniqueId]: { ...prev[uniqueId], heavy_meal: value }
+    }));
+
     try {
       const res = await fetch("/api/participants/update", {
         method: "POST",
@@ -176,11 +249,37 @@ export default function Dashboard() {
 
       if (res.ok) {
         showToastMessage(value ? "✅ Makanan berat ditandai sudah diambil" : "⚠️ Makanan berat ditandai belum diambil", "success");
-        refreshManually();
+        // Clear optimistic update setelah berhasil
+        setOptimisticUpdates(prev => {
+          const newState = { ...prev };
+          if (newState[uniqueId]) {
+            delete newState[uniqueId].heavy_meal;
+            if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
+          }
+          return newState;
+        });
       } else {
+        // Rollback jika gagal
+        setOptimisticUpdates(prev => {
+          const newState = { ...prev };
+          if (newState[uniqueId]) {
+            delete newState[uniqueId].heavy_meal;
+            if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
+          }
+          return newState;
+        });
         showToastMessage("❌ Gagal update makanan berat", "error");
       }
     } catch (error) {
+      // Rollback jika error
+      setOptimisticUpdates(prev => {
+        const newState = { ...prev };
+        if (newState[uniqueId]) {
+          delete newState[uniqueId].heavy_meal;
+          if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
+        }
+        return newState;
+      });
       console.error("Error updating heavy meal:", error);
       showToastMessage("❌ Terjadi kesalahan", "error");
     }
@@ -396,13 +495,16 @@ export default function Dashboard() {
               <p className="text-center text-gray-400">Loading data...</p>
             ) : (
               <TableDashboard
-                filteredData={paginatedData.map((p) => ({
-                  ...p,
-                  registered_at: p.registered_at || '',
-                  seminar_kit: p.seminar_kit || false,
-                  consumption: p.consumption || false,
-                  heavy_meal: p.heavy_meal || false,
-                }))}
+                filteredData={paginatedData.map((p) => {
+                  const optimistic = optimisticUpdates[p.unique] || {};
+                  return {
+                    ...p,
+                    registered_at: p.registered_at || '',
+                    seminar_kit: optimistic.seminar_kit !== undefined ? optimistic.seminar_kit : (p.seminar_kit || false),
+                    consumption: optimistic.consumption !== undefined ? optimistic.consumption : (p.consumption || false),
+                    heavy_meal: optimistic.heavy_meal !== undefined ? optimistic.heavy_meal : (p.heavy_meal || false),
+                  };
+                })}
                 onResend={handleResendEmail}
                 onUpdateKit={handleUpdateKit}
                 onUpdateConsumption={handleUpdateConsumption}
