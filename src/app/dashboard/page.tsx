@@ -31,6 +31,42 @@ export default function Dashboard() {
   // Use real-time participants hook
   const { participants: participantData, isConnected, error: realtimeError, refreshManually } = useRealtimeParticipants();
 
+  // Auto-clear optimistic updates ketika real-time data sudah match
+  useEffect(() => {
+    if (participantData.length > 0 && Object.keys(optimisticUpdates).length > 0) {
+      const newOptimisticUpdates = { ...optimisticUpdates };
+      let hasChanges = false;
+
+      participantData.forEach(participant => {
+        const optimistic = optimisticUpdates[participant.unique];
+        if (optimistic) {
+          // Check apakah data real-time sudah match dengan optimistic update
+          if (optimistic.seminar_kit !== undefined && participant.seminar_kit === optimistic.seminar_kit) {
+            delete newOptimisticUpdates[participant.unique]?.seminar_kit;
+            hasChanges = true;
+          }
+          if (optimistic.consumption !== undefined && participant.consumption === optimistic.consumption) {
+            delete newOptimisticUpdates[participant.unique]?.consumption;
+            hasChanges = true;
+          }
+          if (optimistic.heavy_meal !== undefined && participant.heavy_meal === optimistic.heavy_meal) {
+            delete newOptimisticUpdates[participant.unique]?.heavy_meal;
+            hasChanges = true;
+          }
+
+          // Hapus entry jika sudah kosong
+          if (newOptimisticUpdates[participant.unique] && Object.keys(newOptimisticUpdates[participant.unique]).length === 0) {
+            delete newOptimisticUpdates[participant.unique];
+          }
+        }
+      });
+
+      if (hasChanges) {
+        setOptimisticUpdates(newOptimisticUpdates);
+      }
+    }
+  }, [participantData, optimisticUpdates]);
+
   const showToastMessage = (message: string, type: "success" | "error") => {
     setToastMessage(message);
     setToastType(type);
@@ -145,15 +181,8 @@ export default function Dashboard() {
 
       if (res.ok) {
         showToastMessage(value ? "✅ Seminar kit ditandai sudah diambil" : "⚠️ Seminar kit ditandai belum diambil", "success");
-        // Clear optimistic update setelah berhasil
-        setOptimisticUpdates(prev => {
-          const newState = { ...prev };
-          if (newState[uniqueId]) {
-            delete newState[uniqueId].seminar_kit;
-            if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
-          }
-          return newState;
-        });
+        // Jangan clear optimistic update, biarkan real-time update yang mengambil alih
+        // Ini mencegah flickering
       } else {
         // Rollback jika gagal
         setOptimisticUpdates(prev => {
@@ -197,15 +226,8 @@ export default function Dashboard() {
 
       if (res.ok) {
         showToastMessage(value ? "✅ Snack ditandai sudah diambil" : "⚠️ Snack ditandai belum diambil", "success");
-        // Clear optimistic update setelah berhasil
-        setOptimisticUpdates(prev => {
-          const newState = { ...prev };
-          if (newState[uniqueId]) {
-            delete newState[uniqueId].consumption;
-            if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
-          }
-          return newState;
-        });
+        // Jangan clear optimistic update, biarkan real-time update yang mengambil alih
+        // Ini mencegah flickering
       } else {
         // Rollback jika gagal
         setOptimisticUpdates(prev => {
@@ -249,15 +271,8 @@ export default function Dashboard() {
 
       if (res.ok) {
         showToastMessage(value ? "✅ Makanan berat ditandai sudah diambil" : "⚠️ Makanan berat ditandai belum diambil", "success");
-        // Clear optimistic update setelah berhasil
-        setOptimisticUpdates(prev => {
-          const newState = { ...prev };
-          if (newState[uniqueId]) {
-            delete newState[uniqueId].heavy_meal;
-            if (Object.keys(newState[uniqueId]).length === 0) delete newState[uniqueId];
-          }
-          return newState;
-        });
+        // Jangan clear optimistic update, biarkan real-time update yang mengambil alih
+        // Ini mencegah flickering
       } else {
         // Rollback jika gagal
         setOptimisticUpdates(prev => {
