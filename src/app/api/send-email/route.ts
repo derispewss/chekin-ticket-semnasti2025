@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
                           </p>
                           
                           <p class="event-datetime">
-                            <strong>Event Date: DEC 6, 2025, 8:00 AM (WIB)</strong>
+                            <strong>Event Date: DEC 6, 2025, 7:15 AM (WIB)</strong>
                           </p>
                           
                           <div class="qr-wrapper">
