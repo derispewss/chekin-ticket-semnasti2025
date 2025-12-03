@@ -78,6 +78,16 @@ export async function updateParticipant(unique: string, updates: Partial<Partici
   const fields = [];
   const values = [];
 
+  if (updates.name !== undefined) {
+    fields.push('name = ?');
+    values.push(updates.name);
+  }
+
+  if (updates.email !== undefined) {
+    fields.push('email = ?');
+    values.push(updates.email);
+  }
+
   if (updates.present !== undefined) {
     fields.push('present = ?');
     values.push(updates.present);

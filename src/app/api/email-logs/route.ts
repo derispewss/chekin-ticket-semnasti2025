@@ -3,7 +3,7 @@ import { getEmailLogs, deleteEmailLog, deleteAllEmailLogs } from '@/lib/db';
 
 export async function GET() {
     try {
-        const logs = await getEmailLogs({ limit: 50 }); // Get last 50 logs
+        const logs = await getEmailLogs(); // Get all logs
         return NextResponse.json(logs);
     } catch (error) {
         console.error('Failed to fetch email logs:', error);

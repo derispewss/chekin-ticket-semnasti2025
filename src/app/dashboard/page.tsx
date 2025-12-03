@@ -6,8 +6,9 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import UploadModal from "@/components/UploadModal";
 import ManualRegistrationModal from "@/components/ManualRegistrationModal";
+import EditParticipantModal from "@/components/EditParticipantModal";
 import EmailProgressModal from "@/components/EmailProgressModal";
-import { FaEnvelope, FaTrash, FaUpload, FaDownload, FaSearch, FaUserPlus } from "react-icons/fa";
+import { FaEnvelope, FaTrash, FaUpload, FaDownload, FaSearch, FaUserPlus, FaUsers, FaTimes } from "react-icons/fa";
 import Toast from "@/components/Toast";
 import { useRealtimeParticipants } from "@/hooks/useRealtimeParticipants";
 
@@ -18,6 +19,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isManualRegModalOpen, setIsManualRegModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingParticipant, setEditingParticipant] = useState<any>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -26,6 +29,9 @@ export default function Dashboard() {
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const [showToast, setShowToast] = useState(false);
   const [showEmailHistory, setShowEmailHistory] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyPage, setHistoryPage] = useState(1);
+  const historyItemsPerPage = 100;
 
   // Email progress state
   const [emailProgress, setEmailProgress] = useState({
@@ -117,6 +123,11 @@ export default function Dashboard() {
     }
   }, [realtimeError]);
 
+  // Auto-reset pagination when search or filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
   const handleDeleteAll = async () => {
     if (confirm("Are you sure you want to delete ALL participants? This cannot be undone.")) {
       try {
@@ -130,6 +141,52 @@ export default function Dashboard() {
       } catch (error) {
         console.error("Error deleting participants:", error);
       }
+    }
+  };
+
+  const handleDeleteParticipant = async (unique: string) => {
+    if (!confirm(`Are you sure you want to delete participant ${unique}?`)) return;
+
+    try {
+      const res = await fetch(`/api/participants?unique=${unique}`, { method: "DELETE" });
+      if (res.ok) {
+        showToastMessage("✅ Participant deleted successfully", "success");
+        refreshManually();
+      } else {
+        showToastMessage("❌ Failed to delete participant", "error");
+      }
+    } catch (error) {
+      console.error("Error deleting participant:", error);
+      showToastMessage("❌ Error deleting participant", "error");
+    }
+  };
+
+  const handleEditParticipant = (participant: any) => {
+    setEditingParticipant(participant);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateParticipant = async (unique: string, name: string, email: string) => {
+    try {
+      const res = await fetch("/api/participants/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unique, name, email }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        showToastMessage("✅ Participant updated successfully", "success");
+        refreshManually();
+      } else {
+        const errorMsg = data.error || "Failed to update participant";
+        console.error("Update error:", data);
+        showToastMessage(`❌ ${errorMsg}`, "error");
+      }
+    } catch (error) {
+      console.error("Error updating participant:", error);
+      showToastMessage("❌ Error updating participant", "error");
     }
   };
 
@@ -448,20 +505,105 @@ export default function Dashboard() {
 
   const itemsPerPage = 10;
 
-  const filteredData = participantData.filter((participant) => {
-    const searchLower = search.toLowerCase();
-    const matchName = participant.name.toLowerCase().includes(searchLower);
-    const matchUnique = participant.unique.toLowerCase().includes(searchLower);
-    const matchEmail = participant.email.toLowerCase().includes(searchLower);
-    const matchSearch = matchName || matchUnique || matchEmail;
+  // Process Email Logs
+  const processedLogsMap = emailLogs
+    .filter(log => {
+      const searchLower = historySearch.toLowerCase();
+      return (
+        (log.email && log.email.toLowerCase().includes(searchLower)) ||
+        (log.participant_unique_id && log.participant_unique_id.toLowerCase().includes(searchLower))
+      );
+    })
+    .reduce((acc: Map<string, any>, log) => {
+      const key = log.participant_unique_id || log.email;
+      if (acc.has(key)) {
+        const existing = acc.get(key);
+        existing.count += 1;
+        if (new Date(log.sent_at) > new Date(existing.sent_at)) {
+          acc.set(key, { ...log, count: existing.count });
+        }
+      } else {
+        acc.set(key, { ...log, count: 1 });
+      }
+      return acc;
+    }, new Map());
 
+  const processedLogs = Array.from(processedLogsMap.values())
+    .sort((a: any, b: any) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime());
+
+  const totalHistoryPages = Math.ceil(processedLogs.length / historyItemsPerPage);
+  const paginatedHistory = processedLogs.slice(
+    (historyPage - 1) * historyItemsPerPage,
+    historyPage * historyItemsPerPage
+  );
+
+  // Optimized search with auto-reset pagination
+  const searchTrimmed = search.trim().toLowerCase();
+
+  const filteredData = participantData.filter((participant) => {
+    // If no search term, only apply status filter
+    if (!searchTrimmed) {
+      const matchStatus = statusFilter === "all" ? true : statusFilter === "present" ? participant.present : !participant.present;
+      return matchStatus;
+    }
+
+    // Normalize data for better matching
+    const nameLower = participant.name.toLowerCase().trim();
+    const uniqueLower = participant.unique.toLowerCase().trim();
+    const emailLower = participant.email.toLowerCase().trim();
+
+    // Check for exact match first (highest priority)
+    const exactMatchName = nameLower === searchTrimmed;
+    const exactMatchUnique = uniqueLower === searchTrimmed;
+    const exactMatchEmail = emailLower === searchTrimmed;
+
+    // Check for starts with (medium priority)
+    const startsWithName = nameLower.startsWith(searchTrimmed);
+    const startsWithUnique = uniqueLower.startsWith(searchTrimmed);
+    const startsWithEmail = emailLower.startsWith(searchTrimmed);
+
+    // Check for contains (lowest priority)
+    const containsName = nameLower.includes(searchTrimmed);
+    const containsUnique = uniqueLower.includes(searchTrimmed);
+    const containsEmail = emailLower.includes(searchTrimmed);
+
+    // Match if any condition is true
+    const matchSearch = exactMatchName || exactMatchUnique || exactMatchEmail ||
+      startsWithName || startsWithUnique || startsWithEmail ||
+      containsName || containsUnique || containsEmail;
+
+    // Apply status filter
     const matchStatus = statusFilter === "all" ? true : statusFilter === "present" ? participant.present : !participant.present;
 
     return matchSearch && matchStatus;
   });
 
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  // Sort results: exact matches first, then starts with, then contains
+  const sortedFilteredData = searchTrimmed ? filteredData.sort((a, b) => {
+    const aName = a.name.toLowerCase().trim();
+    const bName = b.name.toLowerCase().trim();
+    const aUnique = a.unique.toLowerCase().trim();
+    const bUnique = b.unique.toLowerCase().trim();
+    const aEmail = a.email.toLowerCase().trim();
+    const bEmail = b.email.toLowerCase().trim();
+
+    // Exact matches get highest priority
+    const aExact = aName === searchTrimmed || aUnique === searchTrimmed || aEmail === searchTrimmed;
+    const bExact = bName === searchTrimmed || bUnique === searchTrimmed || bEmail === searchTrimmed;
+    if (aExact && !bExact) return -1;
+    if (!aExact && bExact) return 1;
+
+    // Starts with gets second priority
+    const aStarts = aName.startsWith(searchTrimmed) || aUnique.startsWith(searchTrimmed) || aEmail.startsWith(searchTrimmed);
+    const bStarts = bName.startsWith(searchTrimmed) || bUnique.startsWith(searchTrimmed) || bEmail.startsWith(searchTrimmed);
+    if (aStarts && !bStarts) return -1;
+    if (!aStarts && bStarts) return 1;
+
+    return 0;
+  }) : filteredData;
+
+  const totalPages = Math.ceil(sortedFilteredData.length / itemsPerPage);
+  const paginatedData = sortedFilteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -499,6 +641,10 @@ export default function Dashboard() {
           <div className="flex flex-col lg:flex-row justify-between gap-4 lg:gap-6 items-start lg:items-center">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full lg:w-auto">
               <h2 className="text-2xl md:text-3xl font-bold font-plus-jakarta-sans">Participant List</h2>
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30">
+                <FaUsers className="text-blue-300 text-sm" />
+                <span className="text-sm text-blue-200 font-semibold">{participantData.length} Total</span>
+              </div>
               {/* Real-time connection indicator */}
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-black/30 border border-gray-700">
                 <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
@@ -508,53 +654,63 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 lg:flex lg:flex-wrap gap-2 md:gap-3 w-full lg:w-auto">
+            <div className="flex flex-wrap gap-2 md:gap-3 w-full lg:w-auto">
               <button
                 onClick={() => setIsManualRegModalOpen(true)}
-                className="px-3 md:px-4 lg:px-6 py-2 md:py-2.5 border border-cyan-400 text-cyan-300 hover:bg-cyan-500/20 transition flex items-center justify-center gap-2 rounded-lg text-sm md:text-base whitespace-nowrap"
+                className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-cyan-500/10 to-cyan-600/10 px-4 py-2.5 text-sm font-medium text-cyan-300 shadow-lg shadow-cyan-500/20 ring-1 ring-inset ring-cyan-400/20 transition-all hover:from-cyan-500/20 hover:to-cyan-600/20 hover:shadow-cyan-500/30 hover:ring-cyan-400/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
               >
-                <FaUserPlus className="text-sm" /> <span className="hidden sm:inline">Tambah Manual</span><span className="sm:hidden">Manual</span>
+                <FaUserPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">Tambah Manual</span>
+                <span className="sm:hidden">Manual</span>
               </button>
               <button
                 onClick={() => setIsUploadModalOpen(true)}
-                className="px-3 md:px-4 lg:px-6 py-2 md:py-2.5 border border-blue-400 text-blue-300 hover:bg-blue-500/20 transition flex items-center justify-center gap-2 rounded-lg text-sm md:text-base whitespace-nowrap"
+                className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-blue-500/10 to-blue-600/10 px-4 py-2.5 text-sm font-medium text-blue-300 shadow-lg shadow-blue-500/20 ring-1 ring-inset ring-blue-400/20 transition-all hover:from-blue-500/20 hover:to-blue-600/20 hover:shadow-blue-500/30 hover:ring-blue-400/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
               >
-                <FaUpload className="text-sm" /> <span className="hidden sm:inline">Upload Data</span><span className="sm:hidden">Upload</span>
+                <FaUpload className="h-4 w-4" />
+                <span className="hidden sm:inline">Upload Data</span>
+                <span className="sm:hidden">Upload</span>
               </button>
               <button
                 onClick={handleSendEmail}
                 disabled={sendingEmail}
-                className="px-3 md:px-4 lg:px-6 py-2 md:py-2.5 border border-green-400 text-green-300 hover:bg-green-500/20 transition flex items-center justify-center gap-2 rounded-lg text-sm md:text-base whitespace-nowrap disabled:opacity-50"
+                className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-green-500/10 to-green-600/10 px-4 py-2.5 text-sm font-medium text-green-300 shadow-lg shadow-green-500/20 ring-1 ring-inset ring-green-400/20 transition-all hover:from-green-500/20 hover:to-green-600/20 hover:shadow-green-500/30 hover:ring-green-400/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
               >
-                <FaEnvelope className="text-sm" /> <span className="hidden sm:inline">{sendingEmail ? "Sending..." : "Send Emails"}</span><span className="sm:hidden">Email</span>
+                <FaEnvelope className="h-4 w-4" />
+                <span className="hidden sm:inline">{sendingEmail ? "Sending..." : "Send Emails"}</span>
+                <span className="sm:hidden">Email</span>
               </button>
               <button
                 onClick={handleDeleteAll}
-                className="px-3 md:px-4 lg:px-6 py-2 md:py-2.5 border border-red-400 text-red-300 hover:bg-red-500/20 transition flex items-center justify-center gap-2 rounded-lg text-sm md:text-base whitespace-nowrap"
+                className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-red-500/10 to-red-600/10 px-4 py-2.5 text-sm font-medium text-red-300 shadow-lg shadow-red-500/20 ring-1 ring-inset ring-red-400/20 transition-all hover:from-red-500/20 hover:to-red-600/20 hover:shadow-red-500/30 hover:ring-red-400/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
               >
-                <FaTrash className="text-sm" /> <span className="hidden sm:inline">Delete All</span><span className="sm:hidden">Delete</span>
+                <FaTrash className="h-4 w-4" />
+                <span className="hidden sm:inline">Delete All</span>
+                <span className="sm:hidden">Delete</span>
               </button>
 
               {/* Export Dropdown */}
-              <div className="relative col-span-2 lg:col-span-1">
+              <div className="relative">
                 <button
                   onClick={() => setShowExportMenu(!showExportMenu)}
                   disabled={exporting}
-                  className="w-full lg:w-auto px-3 md:px-4 lg:px-6 py-2 md:py-2.5 border border-purple-400 text-purple-300 hover:bg-purple-500/20 transition flex items-center justify-center gap-2 rounded-lg text-sm md:text-base whitespace-nowrap disabled:opacity-50"
+                  className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-purple-500/10 to-purple-600/10 px-4 py-2.5 text-sm font-medium text-purple-300 shadow-lg shadow-purple-500/20 ring-1 ring-inset ring-purple-400/20 transition-all hover:from-purple-500/20 hover:to-purple-600/20 hover:shadow-purple-500/30 hover:ring-purple-400/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
                 >
-                  <FaDownload className="text-sm" /> {exporting ? "Exporting..." : "Export Data"}
+                  <FaDownload className="h-4 w-4" />
+                  <span>{exporting ? "Exporting..." : "Export Data"}</span>
                 </button>
                 {showExportMenu && (
-                  <div className="absolute right-0 mt-2 w-full lg:w-56 bg-[#0f0b24] border border-purple-400/30 rounded-lg shadow-xl z-20">
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0f0b24]/95 backdrop-blur-sm shadow-2xl z-20 overflow-hidden">
                     <button
                       onClick={() => {
                         handleExport('all');
                         setShowExportMenu(false);
                       }}
                       disabled={exporting}
-                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200 rounded-t-lg text-sm md:text-base"
+                      className="w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-3 text-gray-200 text-sm border-b border-white/5 disabled:opacity-50"
                     >
-                      <FaDownload className="text-purple-400 text-sm" /> Semua Peserta
+                      <FaDownload className="text-purple-400 h-4 w-4" />
+                      <span>Semua Peserta</span>
                     </button>
                     <button
                       onClick={() => {
@@ -562,9 +718,10 @@ export default function Dashboard() {
                         setShowExportMenu(false);
                       }}
                       disabled={exporting}
-                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200 text-sm md:text-base"
+                      className="w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-3 text-gray-200 text-sm border-b border-white/5 disabled:opacity-50"
                     >
-                      <FaDownload className="text-green-400 text-sm" /> Peserta Hadir
+                      <FaDownload className="text-green-400 h-4 w-4" />
+                      <span>Peserta Hadir</span>
                     </button>
                     <button
                       onClick={() => {
@@ -572,9 +729,10 @@ export default function Dashboard() {
                         setShowExportMenu(false);
                       }}
                       disabled={exporting}
-                      className="w-full px-4 py-3 text-left hover:bg-purple-500/10 transition flex items-center gap-2 text-gray-200 rounded-b-lg text-sm md:text-base"
+                      className="w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-3 text-gray-200 text-sm disabled:opacity-50"
                     >
-                      <FaDownload className="text-red-400 text-sm" /> Peserta Tidak Hadir
+                      <FaDownload className="text-red-400 h-4 w-4" />
+                      <span>Peserta Tidak Hadir</span>
                     </button>
                   </div>
                 )}
@@ -600,15 +758,31 @@ export default function Dashboard() {
                 placeholder="Search by name, unique code, or email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 md:pl-11 pr-4 py-2.5 md:py-3 rounded-lg bg-[#0f0b24] border border-[#17D3FD]/20 text-gray-200 outline-none placeholder:text-gray-500 focus:border-[#17D3FD]/60 transition text-sm md:text-base"
+                className="w-full pl-9 md:pl-11 pr-10 py-2.5 md:py-3 rounded-lg bg-[#0f0b24] border border-[#17D3FD]/20 text-gray-200 outline-none placeholder:text-gray-500 focus:border-[#17D3FD]/60 transition text-sm md:text-base"
               />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                  title="Clear search"
+                >
+                  <FaTimes className="text-sm" />
+                </button>
+              )}
             </div>
           </div>
 
           {/* Search Results Info */}
           {search && (
-            <div className="mt-4 text-sm text-gray-400 font-plus-jakarta-sans">
-              Menampilkan <span className="text-[#17D3FD] font-semibold">{filteredData.length}</span> hasil untuk "{search}"
+            <div className="mt-4 flex items-center justify-between text-sm font-plus-jakarta-sans">
+              <div className="text-gray-400">
+                Menampilkan <span className="text-[#17D3FD] font-semibold">{sortedFilteredData.length}</span> hasil untuk "<span className="text-white font-medium">{search}</span>"
+              </div>
+              {sortedFilteredData.length === 0 && (
+                <div className="text-yellow-400 text-xs">
+                  Tidak ada hasil yang cocok
+                </div>
+              )}
             </div>
           )}
 
@@ -643,6 +817,8 @@ export default function Dashboard() {
                 onUpdateKitAndSnack={handleUpdateKitAndSnack}
                 onUpdateHeavyMeal={handleUpdateHeavyMeal}
                 onUpdateMissionCard={handleUpdateMissionCard}
+                onEdit={handleEditParticipant}
+                onDelete={handleDeleteParticipant}
               />
             )}
           </div>
@@ -704,12 +880,24 @@ export default function Dashboard() {
             }}
             onError={(message) => showToastMessage(`❌ ${message}`, 'error')}
           />
+          <EditParticipantModal
+            isOpen={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            participant={editingParticipant}
+            onUpdate={handleUpdateParticipant}
+          />
         </div>
 
         {/* Email History Section */}
         <div className="max-w-7xl mx-auto mt-6 md:mt-8 rounded-xl md:rounded-2xl bg-[#181138] border border-[#17D3FD]/30 shadow-2xl p-4 md:p-6 lg:p-8 text-white">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 md:mb-6">
-            <h2 className="text-2xl md:text-3xl font-bold font-plus-jakarta-sans">Email History</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl md:text-3xl font-bold font-plus-jakarta-sans">Email History</h2>
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/30">
+                <FaEnvelope className="text-purple-300 text-sm" />
+                <span className="text-sm text-purple-200 font-semibold">{processedLogs.length} Total</span>
+              </div>
+            </div>
             <div className="flex gap-2 w-full sm:w-auto">
               <button
                 onClick={handleDeleteAllEmailLogs}
@@ -737,62 +925,116 @@ export default function Dashboard() {
           </div>
 
           {showEmailHistory && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left font-plus-jakarta-sans">
-                <thead>
-                  <tr className="border-b border-gray-700">
-                    <th className="pb-3 px-4">Waktu</th>
-                    <th className="pb-3 px-4">Email</th>
-                    <th className="pb-3 px-4">Unique ID</th>
-                    <th className="pb-3 px-4">Status</th>
-                    <th className="pb-3 px-4">Error</th>
-                    <th className="pb-3 px-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {emailLogs.length === 0 ? (
+            <div className="space-y-4">
+              {/* History Search */}
+              <div className="relative">
+                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
+                <input
+                  type="text"
+                  placeholder="Search history by unique code or email..."
+                  value={historySearch}
+                  onChange={(e) => {
+                    setHistorySearch(e.target.value);
+                    setHistoryPage(1); // Reset to first page on search
+                  }}
+                  className="w-full pl-9 pr-4 py-2 rounded-lg bg-[#0f0b24] border border-[#17D3FD]/20 text-gray-200 outline-none placeholder:text-gray-500 focus:border-[#17D3FD]/60 transition text-sm"
+                />
+              </div>
+
+              <div className="w-full overflow-x-auto rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+                <table className="w-full text-left text-sm text-gray-300 font-plus-jakarta-sans">
+                  <thead className="bg-black/20 text-xs uppercase tracking-wider text-gray-400 font-semibold">
                     <tr>
-                      <td colSpan={6} className="text-center py-8 text-gray-400">
-                        Belum ada email yang dikirim
-                      </td>
+                      <th className="px-6 py-4">Waktu (Terbaru)</th>
+                      <th className="px-6 py-4">Email</th>
+                      <th className="px-6 py-4">Unique ID</th>
+                      <th className="px-6 py-4 text-center">Status</th>
+                      <th className="px-6 py-4 text-center">Attempts</th>
+                      <th className="px-6 py-4">Error (Latest)</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
-                  ) : (
-                    emailLogs.map((log) => (
-                      <tr key={log.id} className="border-b border-gray-800 hover:bg-white/5">
-                        <td className="py-3 px-4 text-sm text-gray-300">
-                          {new Date(log.sent_at).toLocaleString('id-ID')}
-                        </td>
-                        <td className="py-3 px-4 text-sm">{log.email}</td>
-                        <td className="py-3 px-4 text-sm font-mono text-blue-300">
-                          {log.participant_unique_id}
-                        </td>
-                        <td className="py-3 px-4">
-                          {log.status === 'success' ? (
-                            <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-semibold">
-                              ✓ Success
-                            </span>
-                          ) : (
-                            <span className="px-3 py-1 bg-red-500/20 text-red-300 rounded-full text-xs font-semibold">
-                              ✗ Error
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-red-300">
-                          {log.error_message || '-'}
-                        </td>
-                        <td className="py-3 px-4">
-                          <button
-                            onClick={() => handleDeleteEmailLog(log.id)}
-                            className="px-3 py-1 bg-red-500/20 text-red-300 hover:bg-red-500/30 rounded-lg text-xs transition flex items-center gap-1"
-                          >
-                            <FaTrash className="text-xs" /> Delete
-                          </button>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {paginatedHistory.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="text-center py-8 text-gray-400">
+                          {historySearch ? "Tidak ada history yang cocok" : "Belum ada email yang dikirim"}
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      paginatedHistory.map((log: any) => (
+                        <tr key={log.id} className="hover:bg-white/5 transition-colors duration-200">
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-400">
+                            {new Date(log.sent_at).toLocaleString('id-ID')}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-white">{log.email}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-mono text-blue-300">
+                            {log.participant_unique_id}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            {log.status === 'success' ? (
+                              <span className="inline-flex items-center rounded-full bg-green-400/10 px-2.5 py-1 text-xs font-medium text-green-400 ring-1 ring-inset ring-green-400/20">
+                                ✓ Success
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full bg-red-400/10 px-2.5 py-1 text-xs font-medium text-red-400 ring-1 ring-inset ring-red-400/20">
+                                ✗ Error
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            {log.count > 1 && (
+                              <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full shadow-lg shadow-blue-500/50">
+                                {log.count}
+                              </span>
+                            )}
+                            {log.count === 1 && <span className="text-gray-500 text-xs">-</span>}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-red-300 max-w-[200px] truncate" title={log.error_message}>
+                            {log.error_message || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <button
+                              onClick={() => handleDeleteEmailLog(log.id)}
+                              className="group inline-flex items-center justify-center rounded-lg bg-red-500/10 p-2 text-red-400 transition-all hover:bg-red-500/20 hover:text-red-300"
+                              title="Delete Log"
+                            >
+                              <FaTrash className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* History Pagination */}
+              {totalHistoryPages > 1 && (
+                <div className="flex justify-between items-center mt-4 text-gray-200 font-plus-jakarta-sans text-sm">
+                  <button
+                    onClick={() => setHistoryPage(prev => Math.max(prev - 1, 1))}
+                    disabled={historyPage === 1}
+                    className={`px-3 py-1.5 rounded-lg border ${historyPage === 1
+                      ? "border-gray-600 text-gray-600 cursor-not-allowed"
+                      : "border-[#17D3FD]/40 text-[#17D3FD] hover:bg-[#17D3FD]/10"
+                      }`}
+                  >
+                    Prev
+                  </button>
+                  <span>Page {historyPage} of {totalHistoryPages}</span>
+                  <button
+                    onClick={() => setHistoryPage(prev => Math.min(prev + 1, totalHistoryPages))}
+                    disabled={historyPage === totalHistoryPages}
+                    className={`px-3 py-1.5 rounded-lg border ${historyPage === totalHistoryPages
+                      ? "border-gray-600 text-gray-600 cursor-not-allowed"
+                      : "border-[#17D3FD]/40 text-[#17D3FD] hover:bg-[#17D3FD]/10"
+                      }`}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
