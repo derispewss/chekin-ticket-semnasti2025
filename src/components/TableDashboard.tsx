@@ -234,7 +234,7 @@ function TableDashboard({
                     </span>
                   </label>
                 ) : (
-                  <span className="text-gray-600">-</span>
+                  null
                 )}
               </td>
 
